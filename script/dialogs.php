@@ -1,162 +1,212 @@
 <?php
 
-	if ($Module == 'showDialogs') {
-		$_POST['user_id'] = FormChars($_POST['user_id']);
+switch ($Module) {
+    case 'showDialogs':
+        showDialogs($CONNECT, $_POST['user_id']);
+        break;
+    case 'showMessages':
+        showMessages($CONNECT, $_POST['did'], $_POST['addresseeId']);
+        break;
+    case 'sendMessage':
+        sendMessage($CONNECT, $_POST['did'], $_POST['id'], $_POST['text']);
+        break;
+    case 'createDialog':
+        createDialog($CONNECT, $_POST['senderId'], $_POST['addresseeId']);
+        break;
+}
 
-		$response = array();
-		$ids = array();
-		$idDialogs = array();
-		$dialogStatus = array();
+/**
+ * Список диалогов пользователя
+ *
+ * @param $connect - соединение
+ * @param $post_user_id - идентификатор пользователя
+ */
+function showDialogs($connect, $post_user_id)
+{
 
-		$idsEmpty = array();
-		$idDialogsEmpty = array();
+    $post_user_id = FormChars($post_user_id);
 
-		$getReceiveDialogs = mysqli_query($CONNECT, "SELECT `status`, `receive`, `date`, `id` FROM `dialog` WHERE `send` = '$_POST[user_id]'");
-		$getSendDialogs = mysqli_query($CONNECT, "SELECT `status`, `send`, `date`, `id` FROM `dialog` WHERE `receive` = '$_POST[user_id]'");
+    $response = array();
+    $ids = array();
+    $idDialogs = array();
+    $dialogStatus = array();
 
-		while($receiveDialogs = mysqli_fetch_assoc($getReceiveDialogs)){
-			$userId = $receiveDialogs['receive'];
-			$lastMessage = $receiveDialogs['date'];
-			$dialogId = $receiveDialogs['id'];
-			$status = $receiveDialogs['status'];
+    $idsEmpty = array();
+    $idDialogsEmpty = array();
 
-			if ($status == 1) {
-				$ids[$lastMessage] = $userId;
-				$idDialogs[$userId] = $dialogId;
-			} else {
-				$idsEmpty[$lastMessage] = $userId;
-				$idDialogsEmpty[$userId] = $dialogId;
-			}
-			$dialogStatus[$userId] = $status;
-		}
+    $getReceiveDialogs = mysqli_query($connect, "SELECT `status`, `receive`, `date`, `id` FROM `dialog` WHERE `send` = '$post_user_id'");
+    $getSendDialogs = mysqli_query($connect, "SELECT `status`, `send`, `date`, `id` FROM `dialog` WHERE `receive` = '$post_user_id'");
+
+    while ($receiveDialogs = mysqli_fetch_assoc($getReceiveDialogs)) {
+        $userId = $receiveDialogs['receive'];
+        $lastMessage = $receiveDialogs['date'];
+        $dialogId = $receiveDialogs['id'];
+        $status = $receiveDialogs['status'];
+
+        if ($status == 1) {
+            $ids[$lastMessage] = $userId;
+            $idDialogs[$userId] = $dialogId;
+        } else {
+            $idsEmpty[$lastMessage] = $userId;
+            $idDialogsEmpty[$userId] = $dialogId;
+        }
+        $dialogStatus[$userId] = $status;
+    }
 
 
-		while($sendDialogs = mysqli_fetch_assoc($getSendDialogs)){
-			$userId = $sendDialogs['send'];
-			$lastMessage = $sendDialogs['date'];
-			$dialogId = $sendDialogs['id'];
-			$status = $sendDialogs['status'];
+    while ($sendDialogs = mysqli_fetch_assoc($getSendDialogs)) {
+        $userId = $sendDialogs['send'];
+        $lastMessage = $sendDialogs['date'];
+        $dialogId = $sendDialogs['id'];
+        $status = $sendDialogs['status'];
 
-			if ($status == 1) {
-				$ids[$lastMessage] = $userId;
-				$idDialogs[$userId] = $dialogId;
-			} else {
-				$idsEmpty[$lastMessage] = $userId;
-				$idDialogsEmpty[$userId] = $dialogId;
-			}
-			$dialogStatus[$userId] = $status;
-		}
+        if ($status == 1) {
+            $ids[$lastMessage] = $userId;
+            $idDialogs[$userId] = $dialogId;
+        } else {
+            $idsEmpty[$lastMessage] = $userId;
+            $idDialogsEmpty[$userId] = $dialogId;
+        }
+        $dialogStatus[$userId] = $status;
+    }
 
-		ksort($ids);
-		
-		$sortedIds = array_reverse(array_values(array_unique($ids)));
+    ksort($ids);
 
-		foreach ($sortedIds as $key => $value) {
-    		$userId = $value;
+    $sortedIds = array_reverse(array_values(array_unique($ids)));
 
-    		$getUserInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `id`, `login`, `name`, `surname`, `avatar` 
+    foreach ($sortedIds as $key => $value) {
+        $userId = $value;
+
+        $getUserInfo = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `id`, `login`, `name`, `surname`, `avatar` 
 				FROM `users` WHERE `id` = '$userId'"));
 
-			$userInfo = array();
+        $userInfo = array();
 
-			foreach($getUserInfo as $key => $value) {
-				$userInfo[$key] = $value;
-			}
-			$userInfo['did'] = $idDialogs[$userInfo['id']];
+        foreach ($getUserInfo as $key => $value) {
+            $userInfo[$key] = $value;
+        }
+        $userInfo['did'] = $idDialogs[$userInfo['id']];
 
-			$countUnread = mysqli_fetch_row(mysqli_query($CONNECT, "SELECT COUNT(`status`) FROM `message` WHERE `did` = $userInfo[did] AND `user` != $_POST[user_id] AND `status` = 1"));
+        $countUnread = mysqli_fetch_row(mysqli_query($connect, "SELECT COUNT(`status`) FROM `message` WHERE `did` = $userInfo[did] AND `user` != $post_user_id AND `status` = 1"));
 
-			$userInfo['unread'] = $countUnread[0];
+        $userInfo['unread'] = $countUnread[0];
 
-			$userInfo['status'] = $dialogStatus[$userInfo['id']];
+        $userInfo['status'] = $dialogStatus[$userInfo['id']];
 
-			$response[$userInfo['id']] = $userInfo;
-		}
+        $response[$userInfo['id']] = $userInfo;
+    }
 
-		
+    $response['ids'] = array_values(array_unique($sortedIds));
 
-		$response['ids'] = array_values(array_unique($sortedIds));
+    echo json_encode($response);
 
-		echo json_encode($response);
+}
 
-	}
+/**
+ * Список сообщений диалога
+ *
+ * @param $connect - соединение
+ * @param $post_did - идентификатор диалога
+ * @param $post_addressee_id - идентификатор адресата
+ */
+function showMessages($connect, $post_did, $post_addressee_id)
+{
+    $post_did = FormChars($post_did);
+    $post_addressee_id = FormChars($post_addressee_id);
 
-	else if ($Module == 'showMessages') {
-		$_POST['did'] = FormChars($_POST['did']);
-		$_POST['addresseeId'] = FormChars($_POST['addresseeId']);
+    $response = array();
+    $messagesIds = array();
 
-		$response = array();
-		$messagesIds = array();
+    $messages = array();
+    $texts = array();
+    $users = array();
+    $statuses = array();
+    $times = array();
 
-		$messages = array();
-		$texts = array();
-		$users = array();
-		$statuses = array();
-		$times = array();
+    $getMessages = mysqli_query($connect, "SELECT `user`, `text`, `status`, `date`, `id` FROM `message` WHERE `did` = '$post_did'");
 
-		$getMessages = mysqli_query($CONNECT, "SELECT `user`, `text`, `status`, `date`, `id` FROM `message` WHERE `did` = '$_POST[did]'");
+    while ($message = mysqli_fetch_assoc($getMessages)) {
+        $userId = $message['user'];
+        $messageId = $message['id'];
+        $messageTime = $message['date'];
+        $messageText = $message['text'];
+        $messageStatus = $message['status'];
 
-		while($message = mysqli_fetch_assoc($getMessages)){
-			$userId = $message['user'];
-			$messageId = $message['id'];
-			$messageTime = $message['date'];
-			$messageText = $message['text'];
-			$messageStatus = $message['status'];
+        $messages[$messageTime] = $messageId;
+        $texts[$messageId] = $messageText;
+        $users[$messageId] = $userId;
+        $statuses[$messageId] = $messageStatus;
+        $times[$messageId] = $messageTime;
+    }
 
-			$messages[$messageTime] = $messageId;
-			$texts[$messageId] = $messageText;
-			$users[$messageId] = $userId;
-			$statuses[$messageId] = $messageStatus;
-			$times[$messageId] = $messageTime;
-		}
+    ksort($messages);
+    $sortedMessages = array_values(array_unique($messages));
+    foreach ($sortedMessages as $key => $value) {
 
-		ksort($messages);
-		$sortedMessages = array_values(array_unique($messages));
-		foreach ($sortedMessages as $key => $value) {
-			
-			$message = array();
-			$message['id'] = $value;
-			$message['text'] = $texts[$value];
-			$message['user'] = $users[$value];
-			$message['status'] = $statuses[$value];
-			$message['date'] = $times[$value];
+        $message = array();
+        $message['id'] = $value;
+        $message['text'] = $texts[$value];
+        $message['user'] = $users[$value];
+        $message['status'] = $statuses[$value];
+        $message['date'] = $times[$value];
 
-			$response[$value] = $message;
-		}
+        $response[$value] = $message;
+    }
 
-		$response['mids'] = array_values(array_unique($sortedMessages));
+    $response['mids'] = array_values(array_unique($sortedMessages));
 
-		echo json_encode($response);
+    echo json_encode($response);
 
-		mysqli_query($CONNECT, "UPDATE `message` SET `status` = '0' WHERE `did` = $_POST[did] AND `user` = $_POST[addresseeId]");
-	}
+    mysqli_query($connect, "UPDATE `message` SET `status` = '0' WHERE `did` = $post_did AND `user` = $post_addressee_id");
 
-	else if ($Module == 'sendMessage') {
-		$_POST['did'] = FormChars($_POST['did']);
-		$_POST['id'] = FormChars($_POST['id']);
-		$_POST['text'] = FormChars($_POST['text']);
+}
 
-		mysqli_query($CONNECT, "INSERT INTO `message` VALUES ('', '$_POST[did]', '$_POST[id]', 
-				'$_POST[text]', NOW(), '1')");
+/**
+ * Отправка сообщения
+ *
+ * @param $connect - соединение
+ * @param $post_did - идентификатор диалога
+ * @param $post_id - идентификатор ползователя
+ * @param $post_text - текст сообщения
+ */
+function sendMessage($connect, $post_did, $post_id, $post_text)
+{
 
-		$checkDialog = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `send`, `receive` FROM `dialog` WHERE `id` = '$_POST[did]'"));
+    $post_did = FormChars($post_did);
+    $post_id = FormChars($post_id);
+    $post_text = FormChars($post_text);
 
-		$receive = $checkDialog['send'] == $_POST['id'] ? $checkDialog['receive'] : $checkDialog['send'];
+    mysqli_query($connect, "INSERT INTO `message` VALUES ('', '$post_did', '$post_id', 
+				'$post_text', NOW(), '1')");
 
-		mysqli_query($CONNECT, "UPDATE `dialog` SET `status` = 1, `send` = $_POST[id], `receive` = $receive, `date` = NOW() WHERE `id` = $_POST[did]");
-	}
+    $checkDialog = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `send`, `receive` FROM `dialog` WHERE `id` = '$post_did'"));
 
-	else if ($Module == 'createDialog') {
-		$_POST['senderId'] = FormChars($_POST['senderId']);
-		$_POST['addresseeId'] = FormChars($_POST['addresseeId']);
+    $receive = $checkDialog['send'] == $post_id ? $checkDialog['receive'] : $checkDialog['send'];
 
-		$response = array();
+    mysqli_query($connect, "UPDATE `dialog` SET `status` = 1, `send` = $post_id, `receive` = $receive, `date` = NOW() WHERE `id` = $post_did");
 
-		mysqli_query($CONNECT, "INSERT INTO `dialog` VALUES ('', '0', '$_POST[senderId]', '$_POST[addresseeId]', NOW())");
-		$getDialogId = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `id` FROM `dialog` WHERE `send` = '$_POST[senderId]' AND `receive` = '$_POST[addresseeId]'"));		
+}
 
-		$response['did'] = $getDialogId['id'];
+/**
+ * Создание нового диалога
+ *
+ * @param $connect - соединение
+ * @param $post_sender_id - идентификатор адресанта
+ * @param $post_addressee_id - идентификатор адресата
+ */
+function createDialog($connect, $post_sender_id, $post_addressee_id)
+{
+    $post_sender_id = FormChars($post_sender_id);
+    $post_addressee_id = FormChars($post_addressee_id);
 
-		echo json_encode($response);
-	}
+    $response = array();
+
+    mysqli_query($connect, "INSERT INTO `dialog` VALUES ('', '0', '$post_sender_id', '$post_addressee_id', NOW())");
+    $getDialogId = mysqli_fetch_assoc(mysqli_query($connect,
+        "SELECT `id` FROM `dialog` WHERE `send` = '$post_sender_id' AND `receive` = '$post_addressee_id'"));
+
+    $response['did'] = $getDialogId['id'];
+
+    echo json_encode($response);
+}
 

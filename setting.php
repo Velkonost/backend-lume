@@ -3,7 +3,4 @@
 	define('USER', 'vh156342_root');
 	define('PASSWORD', 'root');
 	define('DB', 'vh156342_database');
-	
-	
-
 ?>

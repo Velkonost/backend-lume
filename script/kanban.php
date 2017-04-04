@@ -1,512 +1,745 @@
 <?php
 
-	if ($Module == 'showBoards') {
-		$_POST['id'] = FormChars($_POST['id']);
-		
-		$response = array();
-		$bids = array();
+switch ($Module) {
+    case 'showBoards':
+        showBoards($CONNECT, $_POST['id']);
+        break;
+    case 'getBoardInfo':
+        getBoardInfo($CONNECT, $_POST['bid']);
+        break;
+    case 'getBoardParticipants':
+        getBoardParticipants($CONNECT, $_POST['bid']);
+        break;
+    case 'getColumnInfo':
+        getColumnInfo($CONNECT, $_POST['cid'], $_POST['id']);
+        break;
+    case 'getCardInfo':
+        getCardInfo($CONNECT, $_POST['card_id']);
+        break;
+    case 'getCardParticipants':
+        getCardParticipants($CONNECT, $_POST['card_id']);
+        break;
+    case 'cardAddComment':
+        cardAddComment($CONNECT, $_POST['card_id'], $_POST['id'], $_POST['text']);
+        break;
+    case 'leaveCard' :
+        leaveCard($CONNECT, $_POST['id'], $_POST['card_id']);
+        break;
+    case 'leaveBoard':
+        leaveBoard($CONNECT, $_POST['id'], $_POST['bid']);
+        break;
+    case 'inviteInBoard':
+        inviteInBoard($CONNECT, $_POST['id'], $_POST['bid']);
+        break;
+    case 'inviteInCard':
+        inviteInCard($CONNECT, $_POST['id'], $_POST['card_id']);
+        break;
+    case 'changeBoardSettings':
+        changeBoardSettings($CONNECT, $_POST['bid'], $_POST['bname'], $_POST['bdescription']);
+        break;
+    case 'changeCardSettings':
+        changeCardSettings($CONNECT, $_POST['card_id'], $_POST['card_name'], $_POST['card_description']);
+        break;
+    case 'getInBoardToInvite':
+        getInBoardToInvite($CONNECT, $_POST['bid']);
+        break;
+    case 'getBoardColumns':
+        getBoardColumns($CONNECT, $_POST['bid']);
+        break;
+    case 'moveCard':
+        moveCard($CONNECT, $_POST['card_id'], $_POST['cid']);
+        break;
+    case 'addColumn':
+        addColumn($CONNECT, $_POST['name'], $_POST['bid']);
+        break;
+    case 'addCard':
+        addCard($CONNECT, $_POST['name'], $_POST['description'], $_POST['cid']);
+        break;
+    case 'addBoard':
+        addBoard($CONNECT, $_POST['id'], $_POST['name'], $_POST['description']);
+        break;
+    case 'changeColumnSettings':
+        changeColumnSettings($CONNECT, $_POST['bid'], $_POST['name'], $_POST['previous_name'], $_POST['position']);
+        break;
+    case 'changeCardColor':
+        changeCardColor($CONNECT, $_POST['card_id'], $_POST['card_color']);
+        break;
+
+}
+
+/**
+ * Показывает список досок пользователя
+ *
+ * @param $connect - соединение
+ * @param $post_id - идентификатор пользователя
+ */
+function showBoards($connect, $post_id) {
+    $post_id = FormChars($post_id);
+
+    $response = array();
+    $bids = array();
+
+    $contributedBoards = mysqli_query($connect, "SELECT * FROM `in_board` WHERE `uid` = '$post_id'");
+
+    while ($board = mysqli_fetch_assoc($contributedBoards)) {
+        $bid = $board['bid'];
+        $getName = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `name` FROM `boards` WHERE `id` = $bid"));
+
+        array_push($bids, $bid);
+        $response[$bid] = $getName['name'];
+    }
+    $response['bids'] = $bids;
+
+    echo json_encode($response);
+}
+
+/**
+ * Получение информации о доске
+ * @param $connect - соединение
+ * @param $post_bid - идентификатор доски
+ */
+function getBoardInfo($connect, $post_bid) {
+    $post_bid = FormChars($post_bid);
+
+    $response = array();
 
-		$contributedBoards = mysqli_query($CONNECT, "SELECT * FROM `in_board` WHERE `uid` = '$_POST[id]'");
+    $uids = array();
+    $cids = array();
+    $cNames = array();
 
-		while ($board = mysqli_fetch_assoc($contributedBoards)){
-			$bid = $board['bid'];
-			$getName = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `name` FROM `boards` WHERE `id` = $bid"));
 
-			array_push($bids, $bid);
-			$response[$bid] = $getName['name'];
-		}
-		$response['bids'] = $bids;
+    $boardInfo = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `name`, `description` FROM `boards` WHERE `id` = '$post_bid'"));
+    $boardName = $boardInfo['name'];
+    $boardDescription = $boardInfo['description'];
 
-		echo json_encode($response);
-	}
+    $columns = mysqli_query($connect, "SELECT * FROM `columns` WHERE `board_id` = '$post_bid'");
 
-	else if ($Module == 'getBoardInfo') {
-		$_POST['bid'] = FormChars($_POST['bid']);
+    while ($column = mysqli_fetch_assoc($columns)) {
+        $columnId = $column['id'];
+        $columnName = $column['name'];
+        $columnPosition = $column['position'];
 
-		$response = array();
+        $cids[$columnPosition] = $columnId;
+        $cNames[$columnId] = $columnName;
 
-		$uids = array();
-		$cids = array();
-		$cNames = array();
+    }
 
+    ksort($cids);
 
-		$boardInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `name`, `description` FROM `boards` WHERE `id` = '$_POST[bid]'"));
-		$boardName = $boardInfo['name'];
-		$boardDescription = $boardInfo['description'];
+    $sortedColumns = array_values(array_unique($cids));
+    foreach ($sortedColumns as $key => $value) {
 
-		$columns = mysqli_query($CONNECT, "SELECT * FROM `columns` WHERE `board_id` = '$_POST[bid]'");
+        $column = array();
+        $column['id'] = $value;
+        $column['name'] = $cNames[$value];
 
-		while ($column = mysqli_fetch_assoc($columns)) {
-			$columnId = $column['id'];
-			$columnName = $column['name'];
-			$columnPosition = $column['position'];
+        $response[$value] = $column;
+    }
 
-			$cids[$columnPosition] = $columnId;
-			$cNames[$columnId] = $columnName;
-			
-		}
 
-		ksort($cids);
+    $boardParticipants = mysqli_query($connect, "SELECT `uid` FROM `in_board` WHERE `bid` = '$post_bid'");
 
-		$sortedColumns = array_values(array_unique($cids));
-		foreach ($sortedColumns as $key => $value) {
-			
-			$column = array();
-			$column['id'] = $value;
-			$column['name'] = $cNames[$value];
+    while ($user = mysqli_fetch_assoc($boardParticipants)) {
+        $userId = $user['uid'];
 
-			$response[$value] = $column;
-		}
+        $userInfo = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `login`, `avatar` FROM `users` WHERE `id` = '$userId'"));
 
+        $participant = array();
+        $participant['id'] = $userId;
+        $participant['login'] = $userInfo['login'];
+        $participant['avatar'] = $userInfo['avatar'];
 
+        $userId .= 'user';
+        array_push($uids, $userId);
 
-		$boardParticipants = mysqli_query($CONNECT, "SELECT `uid` FROM `in_board` WHERE `bid` = '$_POST[bid]'");
+        $response[$userId] = $participant;
 
-		while ($user = mysqli_fetch_assoc($boardParticipants)) {
-			$userId = $user['uid'];
+    }
 
-			$userInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `login`, `avatar` FROM `users` WHERE `id` = '$userId'"));
+    $response['cids'] = array_values(array_unique($sortedColumns));
+    $response['uids'] = array_values(array_unique($uids));
+    $response['bname'] = $boardName;
+    $response['bdescription'] = $boardDescription;
 
-			$participant = array();
-			$participant['id'] = $userId;
-			$participant['login'] = $userInfo['login'];
-			$participant['avatar'] = $userInfo['avatar'];
+    echo json_encode($response);
+}
 
-			$userId .= 'user';
-			array_push($uids, $userId);
+/**
+ * Получение участников доски
+ *
+ * @param $connect - соединение
+ * @param $post_bid - идентификатор доски
+ */
+function getBoardParticipants($connect, $post_bid) {
+    $post_bid = FormChars($post_bid);
 
-			$response[$userId] = $participant;
+    $response = array();
+    $ids = array();
 
-		}
+    $boardParticipants = mysqli_query($connect, "SELECT `uid` FROM `in_board` WHERE `bid` = '$post_bid'");
 
-		$response['cids'] = array_values(array_unique($sortedColumns));
-		$response['uids'] = array_values(array_unique($uids));
-		$response['bname'] = $boardName;
-		$response['bdescription'] = $boardDescription;
+    while ($user = mysqli_fetch_assoc($boardParticipants)) {
+        $userId = $user['uid'];
 
-		echo json_encode($response);
-	}
+        $userInfo = mysqli_fetch_assoc(mysqli_query($connect,
+            "SELECT `login`, `name`, `surname`, `avatar` FROM `users` WHERE `id` = '$userId'"));
 
-	else if ($Module == 'getBoardParticipants') {
-		$_POST['bid'] = FormChars($_POST['bid']);
+        $participant = array();
+        $participant['id'] = $userId;
+        $participant['login'] = $userInfo['login'];
+        $participant['avatar'] = $userInfo['avatar'];
+        $participant['name'] = $userInfo['name'];
+        $participant['surname'] = $userInfo['surname'];
 
-		$response = array();
-		$ids = array();
+        array_push($ids, $userId);
 
-		$boardParticipants = mysqli_query($CONNECT, "SELECT `uid` FROM `in_board` WHERE `bid` = '$_POST[bid]'");
+        $response[$userId] = $participant;
 
-		while ($user = mysqli_fetch_assoc($boardParticipants)) {
-			$userId = $user['uid'];
+    }
 
-			$userInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `login`, `name`, `surname`, `avatar` FROM `users` WHERE `id` = '$userId'"));
+    $response['ids'] = array_values(array_unique($ids));
+    echo json_encode($response);
+}
 
-			$participant = array();
-			$participant['id'] = $userId;
-			$participant['login'] = $userInfo['login'];
-			$participant['avatar'] = $userInfo['avatar'];
-			$participant['name'] = $userInfo['name'];
-			$participant['surname'] = $userInfo['surname'];
+/**
+ * Получение информации о колонке и принадлежащих ей карточках
+ *
+ * @param $connect - соединение
+ * @param $post_cid - идентификатор колонки
+ * @param $post_id - идентификатор пользователя
+ */
+function getColumnInfo($connect, $post_cid, $post_id) {
 
-			array_push($ids, $userId);
+    $post_cid = FormChars($post_cid);
+    $post_id = FormChars($post_id);
 
-			$response[$userId] = $participant;
+    $response = array();
 
-		}
+    $uids = array();
+    $cardIds = array();
+    $cardNames = array();
+    $cardColors = array();
 
-		$response['ids'] = array_values(array_unique($ids));
-		echo json_encode($response);
-	}
+    $cards = mysqli_query($connect,
+        "SELECT `id`, `name`, `description`, `position`, `color` FROM `cards` WHERE `column_id` = '$post_cid'");
 
-	else if ($Module == 'getColumnInfo') {
-		$_POST['cid'] = FormChars($_POST['cid']);
-		$_POST['id'] = FormChars($_POST['id']);
-		
-		$response = array();
+    while ($card = mysqli_fetch_assoc($cards)) {
+        $cardId = $card['id'];
+        $cardName = $card['name'];
+        $cardPosition = $card['position'];
+        $cardColor = $card['color'];
 
-		$uids = array();
-		$cardIds = array();
-		$cardNames = array();
-		$cardColors = array();
+        $cardIds[$cardPosition] = $cardId;
+        $cardNames[$cardId] = $cardName;
+        $cardColors[$cardId] = $cardColor;
 
+    }
 
-		$cards = mysqli_query($CONNECT, "SELECT `id`, `name`, `description`, `position`, `color` FROM `cards` WHERE `column_id` = '$_POST[cid]'");
+    ksort($cardIds);
 
-		while ($card = mysqli_fetch_assoc($cards)) {
-			$cardId = $card['id'];
-			$cardName = $card['name'];
-			$cardPosition = $card['position'];
-			$cardColor = $card['color'];
+    $sortedCards = array_values(array_unique($cardIds));
+    foreach ($sortedCards as $key => $value) {
 
-			$cardIds[$cardPosition] = $cardId;
-			$cardNames[$cardId] = $cardName;
-			$cardColors[$cardId] = $cardColor;
-			
-		}
+        $card = array();
+        $card['name'] = $cardNames[$value];
+        $card['card_color'] = $cardColors[$value];
 
-		ksort($cardIds);
+        $isBelong = false;
 
-		$sortedCards = array_values(array_unique($cardIds));
-		foreach ($sortedCards as $key => $value) {
-			
-			$card = array();
-			$card['name'] = $cardNames[$value];
-			$card['card_color'] = $cardColors[$value];
+        $cardParticipants = mysqli_query($connect, "SELECT `uid` FROM `in_card` WHERE `cid` = '$value'");
 
-			$isBelong = false;
+        $participants = array();
+        $count = 0;
+        while ($user = mysqli_fetch_assoc($cardParticipants)) {
 
-			$cardParticipants = mysqli_query($CONNECT, "SELECT `uid` FROM `in_card` WHERE `cid` = '$value'");
+            $participant = array();
 
-			$participants = array();
-			$count = 0;
-			while($user = mysqli_fetch_assoc($cardParticipants)) {
+            $userId = $user['uid'];
+            $count++;
 
-				$participant = array();
+            if ($userId == $post_id) $isBelong = true;
 
-				$userId = $user['uid'];
-				$count ++;
+            $userInfo = mysqli_fetch_assoc(mysqli_query($connect,
+                "SELECT `login`, `avatar` FROM `users` WHERE `id` = $userId"));
 
-				if ($userId == $_POST['id']) $isBelong = true;
+            $participant['login'] = $userInfo['login'];
+            $participant['avatar'] = $userInfo['avatar'];
 
-				$userInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `login`, `avatar` FROM `users` WHERE `id` = $userId"));
+            $participants[$userId] = $participant;
+            array_push($uids, $userId);
+        }
 
-				$participant['login'] = $userInfo['login'];
-				$participant['avatar'] = $userInfo['avatar'];
+        $card['participants'] = $participants;
+        $card['amount'] = $count;
+        $card['belong'] = $isBelong;
 
-				$participants[$userId] = $participant;
-				array_push($uids, $userId);
-			}
+        $response[$value] = $card;
+    }
 
-			$card['participants'] = $participants;
-			$card['amount'] = $count;
-			$card['belong'] = $isBelong;
+    $response['cids'] = array_values(array_unique($sortedCards));
+    $response['uids'] = array_values(array_unique($uids));
 
-			$response[$value] = $card;
-		}
+    echo json_encode($response);
 
-		$response['cids'] = array_values(array_unique($sortedCards));
-		$response['uids'] = array_values(array_unique($uids));
+}
 
-		echo json_encode($response);
-	}
+/**
+ * Получение информации о карточке
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ */
+function getCardInfo($connect, $post_card_id) {
 
-	else if ($Module == 'getCardInfo') {
-		$_POST['card_id'] = FormChars($_POST['card_id']);
-		
-		$response = array();
-		$ids = array();
+    $post_card_id = FormChars($post_card_id);
 
-		$comments = array();
-		$texts = array();
-		$users = array();
-		$times = array();
+    $response = array();
+    $ids = array();
 
-		$cardInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `description`, `color` FROM `cards` WHERE `id` = '$_POST[card_id]'"));
-		$cardParticipants = mysqli_query($CONNECT, "SELECT `uid` FROM `in_card` WHERE `cid` = '$_POST[card_id]'");
+    $comments = array();
+    $texts = array();
+    $users = array();
+    $times = array();
 
-		while ($user = mysqli_fetch_assoc($cardParticipants)) {
-			$userId = $user['uid'];
+    $cardInfo = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `description`, `color` FROM `cards` WHERE `id` = '$post_card_id'"));
+    $cardParticipants = mysqli_query($connect, "SELECT `uid` FROM `in_card` WHERE `cid` = '$post_card_id'");
 
-			$userInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `login`, `name`, `surname`, `avatar` FROM `users` WHERE `id` = '$userId'"));
+    while ($user = mysqli_fetch_assoc($cardParticipants)) {
+        $userId = $user['uid'];
 
-			$participant = array();
-			$participant['id'] = $userId;
-			$participant['login'] = $userInfo['login'];
-			$participant['avatar'] = $userInfo['avatar'];
-			$participant['name'] = $userInfo['name'];
-			$participant['surname'] = $userInfo['surname'];
+        $userInfo = mysqli_fetch_assoc(mysqli_query($connect,
+            "SELECT `login`, `name`, `surname`, `avatar` FROM `users` WHERE `id` = '$userId'"));
 
-			array_push($ids, $userId);
+        $participant = array();
+        $participant['id'] = $userId;
+        $participant['login'] = $userInfo['login'];
+        $participant['avatar'] = $userInfo['avatar'];
+        $participant['name'] = $userInfo['name'];
+        $participant['surname'] = $userInfo['surname'];
 
-			$response[$userId] = $participant;
+        array_push($ids, $userId);
 
-		}
+        $response[$userId] = $participant;
 
-		$getComments = mysqli_query($CONNECT, "SELECT `send_id`, `text`, `date`, `id` FROM `comments` WHERE `card_id` = '$_POST[card_id]'");
+    }
 
-		while($comment = mysqli_fetch_assoc($getComments)){
-			$userId = $comment['send_id'];
+    $getComments = mysqli_query($connect,
+        "SELECT `send_id`, `text`, `date`, `id` FROM `comments` WHERE `card_id` = '$post_card_id'");
 
-			$getUserLogin = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `login` FROM `users` WHERE `id` = '$userId'"));
+    while ($comment = mysqli_fetch_assoc($getComments)) {
+        $userId = $comment['send_id'];
 
-			$userLogin = $getUserLogin['login'];
+        $getUserLogin = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `login` FROM `users` WHERE `id` = '$userId'"));
 
-			$commentId = $comment['id'];
-			$commentTime = $comment['date'];
-			$commentText = $comment['text'];
+        $userLogin = $getUserLogin['login'];
 
-			$comments[$commentTime] = $commentId;
-			$texts[$commentId] = $commentText;
-			$users[$commentId] = $userLogin;
-			$times[$commentId] = $commentTime;
-		}
+        $commentId = $comment['id'];
+        $commentTime = $comment['date'];
+        $commentText = $comment['text'];
 
-		ksort($comments);
-		$sortedComments = array_values(array_unique($comments));
+        $comments[$commentTime] = $commentId;
+        $texts[$commentId] = $commentText;
+        $users[$commentId] = $userLogin;
+        $times[$commentId] = $commentTime;
+    }
 
-		foreach ($sortedComments as $key => $value) {
+    ksort($comments);
+    $sortedComments = array_values(array_unique($comments));
 
-			$comment = array();
-			$comment['id'] = $value;
-			$comment['text'] = $texts[$value];
-			$comment['user'] = $users[$value];
-			$comment['date'] = $times[$value];
+    foreach ($sortedComments as $key => $value) {
 
-			$response[$value . "comment"] = $comment;
-		}
+        $comment = array();
+        $comment['id'] = $value;
+        $comment['text'] = $texts[$value];
+        $comment['user'] = $users[$value];
+        $comment['date'] = $times[$value];
 
-		$response['comment_ids'] = array_values(array_unique($sortedComments));
+        $response[$value . "comment"] = $comment;
+    }
 
-		$response['card_description'] = $cardInfo['description'];
-		$response['card_color'] = $cardInfo['color'];
+    $response['comment_ids'] = array_values(array_unique($sortedComments));
 
-		$response['uids'] = array_values(array_unique($ids));
-		echo json_encode($response);
-	}
+    $response['card_description'] = $cardInfo['description'];
+    $response['card_color'] = $cardInfo['color'];
 
-	else if ($Module == 'getCardParticipants') {
-		$_POST['card_id'] = FormChars($_POST['card_id']);
-		
-		$response = array();
-		$ids = array();
+    $response['uids'] = array_values(array_unique($ids));
+    echo json_encode($response);
 
-		$cardParticipants = mysqli_query($CONNECT, "SELECT `uid` FROM `in_card` WHERE `cid` = '$_POST[card_id]'");
+}
 
-		while ($user = mysqli_fetch_assoc($cardParticipants)) {
-			$userId = $user['uid'];
+/**
+ * Получение участников карточки
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ */
+function getCardParticipants($connect, $post_card_id) {
 
-			$userInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `login`, `name`, `surname`, `avatar` FROM `users` WHERE `id` = '$userId'"));
+    $post_card_id = FormChars($post_card_id);
 
-			$participant = array();
-			$participant['id'] = $userId;
-			$participant['login'] = $userInfo['login'];
-			$participant['avatar'] = $userInfo['avatar'];
-			$participant['name'] = $userInfo['name'];
-			$participant['surname'] = $userInfo['surname'];
+    $response = array();
+    $ids = array();
 
-			array_push($ids, $userId);
+    $cardParticipants = mysqli_query($connect, "SELECT `uid` FROM `in_card` WHERE `cid` = '$post_card_id'");
 
-			$response[$userId] = $participant;
+    while ($user = mysqli_fetch_assoc($cardParticipants)) {
+        $userId = $user['uid'];
 
-		}
+        $userInfo = mysqli_fetch_assoc(mysqli_query($connect,
+            "SELECT `login`, `name`, `surname`, `avatar` FROM `users` WHERE `id` = '$userId'"));
 
-		$response['ids'] = array_values(array_unique($ids));
-		echo json_encode($response);
-	}
+        $participant = array();
+        $participant['id'] = $userId;
+        $participant['login'] = $userInfo['login'];
+        $participant['avatar'] = $userInfo['avatar'];
+        $participant['name'] = $userInfo['name'];
+        $participant['surname'] = $userInfo['surname'];
 
-	else if ($Module == 'cardAddComment') { 
-		$_POST['card_id'] = FormChars($_POST['card_id']);
-		$_POST['id'] = FormChars($_POST['id']);
-		$_POST['text'] = FormChars($_POST['text']);
+        array_push($ids, $userId);
 
-		mysqli_query($CONNECT, "INSERT INTO `comments` VALUES ('', '$_POST[id]', '$_POST[text]', '$_POST[card_id]', NOW())");
-	}
+        $response[$userId] = $participant;
 
-	else if ($Module == 'leaveCard'){
-		$_POST['id'] = FormChars($_POST['id']);
-		$_POST['card_id'] = FormChars($_POST['card_id']);
+    }
 
-		mysqli_query($CONNECT, "DELETE FROM `in_card` WHERE `uid` = '$_POST[id]' AND `cid` = '$_POST[card_id]'");
-	}
+    $response['ids'] = array_values(array_unique($ids));
+    echo json_encode($response);
 
-	else if ($Module == 'leaveBoard'){
-		$_POST['id'] = FormChars($_POST['id']);
-		$_POST['bid'] = FormChars($_POST['bid']);
+}
 
-		mysqli_query($CONNECT, "DELETE FROM `in_board`  WHERE `uid` = '$_POST[id]' AND `bid` = '$_POST[bid]'");		
-	}
+/**
+ * Добавление комментария в карточку
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ * @param $post_id - идентификатор пользователя
+ * @param $post_text - текст комментария
+ */
+function cardAddComment($connect, $post_card_id, $post_id, $post_text) {
 
-	else if ($Module == 'inviteInBoard') {
-		$_POST['id'] = FormChars($_POST['id']);
-		$_POST['bid'] = FormChars($_POST['bid']);
+    $post_card_id = FormChars($post_card_id);
+    $post_id = FormChars($post_id);
+    $post_text = FormChars($post_text);
 
-		$checkUser = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `id` FROM `in_board` WHERE `uid` = '$_POST[id]' AND `bid` = '$_POST[bid]'"));
+    mysqli_query($connect, "INSERT INTO `comments` VALUES ('', '$post_id', '$post_text', '$post_card_id', NOW())");
 
-		if (!$checkUser) mysqli_query($CONNECT, "INSERT INTO `in_board` VALUES ('', '$_POST[id]', '$_POST[bid]')");		
-	}
+}
 
-	else if ($Module == 'inviteInCard') {
-		$_POST['id'] = FormChars($_POST['id']);
-		$_POST['card_id'] = FormChars($_POST['card_id']);
+/**
+ * Выход из карточки
+ *
+ * @param $connect - соединение
+ * @param $post_id - идентификатор пользователя
+ * @param $post_card_id - идентификатор карточки
+ */
+function leaveCard($connect, $post_id, $post_card_id) {
+    $post_id = FormChars($post_id);
+    $post_card_id = FormChars($post_card_id);
 
-		$checkUser = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `id` FROM `in_card` WHERE `uid` = '$_POST[id]' AND `cid` = '$_POST[card_id]'"));
+    mysqli_query($connect, "DELETE FROM `in_card` WHERE `uid` = '$post_id' AND `cid` = '$post_card_id'");
+}
 
-		if (!$checkUser) mysqli_query($CONNECT, "INSERT INTO `in_card` VALUES ('', '$_POST[id]', '$_POST[card_id]')");		
-	}
+/**
+ * Выход из доски
+ *
+ * @param $connect - соединение
+ * @param $post_id - идентификатор пользователя
+ * @param $post_bid - идентификатор доски
+ */
+function leaveBoard($connect, $post_id, $post_bid) {
 
-	else if ($Module == 'changeBoardSettings') {
-		$_POST['bid'] = FormChars($_POST['bid']);
-		$_POST['bname'] = FormChars($_POST['bname']);
-		$_POST['bdescription'] = FormChars($_POST['bdescription']);
+    $post_id = FormChars($post_id);
+    $post_bid = FormChars($post_bid);
 
-		mysqli_query($CONNECT, "UPDATE `boards` SET `name` = '$_POST[bname]', `description` = '$_POST[bdescription]' WHERE `id` = $_POST[bid]");
-	}
+    mysqli_query($connect, "DELETE FROM `in_board`  WHERE `uid` = '$post_id' AND `bid` = '$post_bid'");
 
-	else if ($Module == 'changeCardSettings') {
-		$_POST['card_id'] = FormChars($_POST['card_id']);
-		$_POST['card_name'] = FormChars($_POST['card_name']);
-		$_POST['card_description'] = FormChars($_POST['card_description']);
+}
 
-		mysqli_query($CONNECT, "UPDATE `cards` SET `name` = '$_POST[card_name]', `description` = '$_POST[card_description]' WHERE `id` = $_POST[card_id]");
-	}
+/**
+ * Добавление пользователя в доску
+ *
+ * @param $connect - соединение
+ * @param $post_id - идентификатор пользователя
+ * @param $post_bid - идентификатор доски
+ */
+function inviteInBoard($connect, $post_id, $post_bid) {
+    $post_id = FormChars($post_id);
+    $post_bid = FormChars($post_bid);
 
-	else if ($Module == 'getInBoardToInvite') {
-		$_POST['bid'] = FormChars($_POST['bid']);
+    $checkUser = mysqli_fetch_assoc(mysqli_query($connect,
+        "SELECT `id` FROM `in_board` WHERE `uid` = '$post_id' AND `bid` = '$post_bid'"));
 
-		$response = array();
-		$ids = array();
+    if (!$checkUser) mysqli_query($connect, "INSERT INTO `in_board` VALUES ('', '$post_id', '$post_bid')");
+}
 
-		$getContacts = mysqli_query($CONNECT, "SELECT `uid` FROM `in_board` WHERE `bid` = '$_POST[bid]'");
+/**
+ * Добавление пользователя в карточку
+ *
+ * @param $connect - соединение
+ * @param $post_id - идентификатор пользователя
+ * @param $post_card_id - идентификатор карточки
+ */
+function inviteInCard($connect, $post_id, $post_card_id) {
 
-		while ($getContact = mysqli_fetch_assoc($getContacts)) {
-			$userId = $getContact['uid'];
+    $post_id = FormChars($post_id);
+    $post_card_id = FormChars($post_card_id);
 
-			$getUserInfo = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `id`, `login`, `name`, `surname`, `avatar` 
+    $checkUser = mysqli_fetch_assoc(mysqli_query($connect,
+        "SELECT `id` FROM `in_card` WHERE `uid` = '$post_id' AND `cid` = '$post_card_id'"));
+
+    if (!$checkUser) mysqli_query($connect, "INSERT INTO `in_card` VALUES ('', '$post_id', '$post_card_id')");
+
+}
+
+/**
+ * Изменение настроек доски
+ *
+ * @param $connect - соединение
+ * @param $post_bid - идентификатор доски
+ * @param $post_bname - название доски
+ * @param $post_bdescription - описание доски
+ */
+function changeBoardSettings($connect, $post_bid, $post_bname, $post_bdescription) {
+    $post_bid = FormChars($post_bid);
+    $post_bname = FormChars($post_bname);
+    $post_bdescription = FormChars($post_bdescription);
+
+    mysqli_query($connect,
+        "UPDATE `boards` SET `name` = '$post_bname', `description` = '$post_bdescription' WHERE `id` = $post_bid");
+}
+
+/**
+ * Изменение настроек карточки
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ * @param $post_card_name - название карточки
+ * @param $post_card_description - описание карточки
+ */
+function changeCardSettings($connect, $post_card_id, $post_card_name, $post_card_description) {
+
+    $post_card_id = FormChars($post_card_id);
+    $post_card_name = FormChars($post_card_name);
+    $post_card_description = FormChars($post_card_description);
+
+    mysqli_query($connect,
+        "UPDATE `cards` SET `name` = '$post_card_name', `description` = '$post_card_description' WHERE `id` = $post_card_id");
+
+}
+
+/**
+ * Получение списка участников доски
+ *
+ * @param $connect - соединение
+ * @param $post_bid - идентификатор доски
+ */
+function getInBoardToInvite($connect, $post_bid) {
+    $post_bid = FormChars($post_bid);
+
+    $response = array();
+    $ids = array();
+
+    $getContacts = mysqli_query($connect, "SELECT `uid` FROM `in_board` WHERE `bid` = '$post_bid'");
+
+    while ($getContact = mysqli_fetch_assoc($getContacts)) {
+        $userId = $getContact['uid'];
+
+        $getUserInfo = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `id`, `login`, `name`, `surname`, `avatar` 
 				FROM `users` WHERE `id` = '$userId'"));
 
-			$userInfo = array();
+        $userInfo = array();
 
-			foreach($getUserInfo as $key => $value) {
-				$userInfo[$key] = $value;
-			}
-			$response[$userInfo['id']] = $userInfo;
-			array_push($ids, $userInfo['id']);
-		}
-		$response['ids'] = array_values(array_unique($ids));;
+        foreach ($getUserInfo as $key => $value) {
+            $userInfo[$key] = $value;
+        }
+        $response[$userInfo['id']] = $userInfo;
+        array_push($ids, $userInfo['id']);
+    }
+    $response['ids'] = array_values(array_unique($ids));;
 
-		echo json_encode($response);
-	}
+    echo json_encode($response);
+}
 
-	else if ($Module == 'getBoardColumns') {
-		$_POST['bid'] = FormChars($_POST['bid']);
+/**
+ * Получение колонок доски
+ *
+ * @param $connect - соединение
+ * @param $post_bid - идентификатор доски
+ */
+function getBoardColumns($connect, $post_bid) {
 
-		$response = array();
-		$cids = array();
-		$cNames = array();
+    $post_bid = FormChars($post_bid);
 
-		$columns = mysqli_query($CONNECT, "SELECT * FROM `columns` WHERE `board_id` = '$_POST[bid]'");
+    $response = array();
+    $cids = array();
+    $cNames = array();
 
-		while ($column = mysqli_fetch_assoc($columns)) {
-			$columnId = $column['id'];
-			$columnName = $column['name'];
-			$columnPosition = $column['position'];
+    $columns = mysqli_query($connect, "SELECT * FROM `columns` WHERE `board_id` = '$post_bid'");
 
-			$cids[$columnPosition] = $columnId;
-			$cNames[$columnId] = $columnName;
-			
-		}
+    while ($column = mysqli_fetch_assoc($columns)) {
+        $columnId = $column['id'];
+        $columnName = $column['name'];
+        $columnPosition = $column['position'];
 
-		ksort($cids);
+        $cids[$columnPosition] = $columnId;
+        $cNames[$columnId] = $columnName;
 
-		$sortedColumns = array_values(array_unique($cids));
-		foreach ($sortedColumns as $key => $value) {
-			
-			$column = array();
-			$column['id'] = $value;
-			$column['name'] = $cNames[$value];
+    }
 
-			$response[$value] = $column;
-		}
+    ksort($cids);
 
-		$response['cids'] = array_values(array_unique($sortedColumns));
+    $sortedColumns = array_values(array_unique($cids));
+    foreach ($sortedColumns as $key => $value) {
 
-		echo json_encode($response);
-	}
+        $column = array();
+        $column['id'] = $value;
+        $column['name'] = $cNames[$value];
 
-	else if ($Module == 'moveCard') {
-		$_POST['card_id'] = FormChars($_POST['card_id']);
-		$_POST['cid'] = FormChars($_POST['cid']);
+        $response[$value] = $column;
+    }
 
-		$getPosition = mysqli_query($CONNECT, "SELECT `position` FROM `cards` WHERE `column_id` = '$_POST[cid]'");
-		$curPosition = 0;
-		while ($position = mysqli_fetch_assoc($getPosition)) {
-			$prevPosition = $position['position'];
-			if ($prevPosition > $curPosition) $curPosition = $prevPosition;
-		}
-		$curPosition ++;
+    $response['cids'] = array_values(array_unique($sortedColumns));
 
-		$getPosition = mysqli_query($CONNECT, "SELECT `position` FROM `cards` WHERE `column_id` = '$_POST[cid]'");
-		$curPosition = 0;
-		while ($position = mysqli_fetch_assoc($getPosition)) {
-			$prevPosition = $position['position'];
-			if ($prevPosition > $curPosition) $curPosition = $prevPosition;
-		}
-		$curPosition ++;
+    echo json_encode($response);
 
-		$getInfoOfThisCard = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `position`, `column_id` FROM `cards` WHERE `id` = '$_POST[card_id]'"));
-		// change position of another cards
-		mysqli_query($CONNECT, "UPDATE `cards` SET `position` = `position` - 1 WHERE `position` > '$getInfoOfThisCard[position]' AND `column_id` = '$getInfoOfThisCard[column_id]' ");
+}
 
+/**
+ * Перемещение карточки
+ *
+ * @param $connect - соединение
+ * @param $post_id - идентификатор карточки
+ * @param $post_cid - идентификатор колонки, в которую перемещают
+ */
+function moveCard($connect, $post_id, $post_cid) {
 
-		mysqli_query($CONNECT, "UPDATE `cards` SET `column_id` = '$_POST[cid]', `position` = $curPosition WHERE `id` = $_POST[card_id]");
-	}
+    $post_id = FormChars($post_id);
+    $post_cid = FormChars($post_cid);
 
-	else if ($Module == 'addColumn'){
-		$_POST['name'] = FormChars($_POST['name']);
-		$_POST['bid'] = FormChars($_POST['bid']);
+    $getPosition = mysqli_query($connect, "SELECT `position` FROM `cards` WHERE `column_id` = '$post_cid'");
+    $curPosition = 0;
+    while ($position = mysqli_fetch_assoc($getPosition)) {
+        $prevPosition = $position['position'];
+        if ($prevPosition > $curPosition) $curPosition = $prevPosition;
+    }
+    $curPosition++;
 
-		$getPosition = mysqli_query($CONNECT, "SELECT `position` FROM `columns` WHERE `board_id` = '$_POST[bid]'");
+    $getPosition = mysqli_query($connect, "SELECT `position` FROM `cards` WHERE `column_id` = '$post_cid'");
+    $curPosition = 0;
+    while ($position = mysqli_fetch_assoc($getPosition)) {
+        $prevPosition = $position['position'];
+        if ($prevPosition > $curPosition) $curPosition = $prevPosition;
+    }
+    $curPosition++;
 
-		$curPosition = 0;
-		while ($position = mysqli_fetch_assoc($getPosition)) {
-			$prevPosition = $position['position'];
+    $getInfoOfThisCard = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `position`, `column_id` FROM `cards` WHERE `id` = '$post_id'"));
 
-			if ($prevPosition > $curPosition) $curPosition = $prevPosition;
-		}
-		$curPosition ++;
+    // change position of another cards
+    mysqli_query($connect, "UPDATE `cards` SET `position` = `position` - 1 WHERE `position` > '$getInfoOfThisCard[position]' AND `column_id` = '$getInfoOfThisCard[column_id]' ");
 
-		mysqli_query($CONNECT, "INSERT INTO `columns`  VALUES ('', '$_POST[name]', '$_POST[bid]', $curPosition)");
-	}
+    mysqli_query($connect, "UPDATE `cards` SET `column_id` = '$_POST[cid]', `position` = $curPosition WHERE `id` = $post_id");
 
-	else if ($Module == 'addCard'){
-		$_POST['name'] = FormChars($_POST['name']);
-		$_POST['description'] = FormChars($_POST['description']);
-		$_POST['cid'] = FormChars($_POST['cid']);
+}
 
-		$getPosition = mysqli_query($CONNECT, "SELECT `position` FROM `cards` WHERE `column_id` = '$_POST[cid]'");
+/**
+ * Добавление колонки
+ *
+ * @param $connect - соединение
+ * @param $post_name - название колонки
+ * @param $post_bid - описание колонки
+ */
+function addColumn($connect, $post_name, $post_bid) {
+    $post_name = FormChars($post_name);
+    $post_bid = FormChars($post_bid);
 
-		$curPosition = 0;
-		while ($position = mysqli_fetch_assoc($getPosition)) {
-			$prevPosition = $position['position'];
-			if ($prevPosition > $curPosition) $curPosition = $prevPosition;
-		}
-		$curPosition ++;
+    $getPosition = mysqli_query($connect, "SELECT `position` FROM `columns` WHERE `board_id` = '$post_bid'");
 
-		mysqli_query($CONNECT, "INSERT INTO `cards` VALUES ('', '$_POST[name]', '$_POST[cid]', '$_POST[description]', $curPosition, '000000')");
-	}
+    $curPosition = 0;
+    while ($position = mysqli_fetch_assoc($getPosition)) {
+        $prevPosition = $position['position'];
 
-	else if ($Module == 'addBoard'){
-		$_POST['id'] = FormChars($_POST['id']);
-		$_POST['name'] = FormChars($_POST['name']);
-		$_POST['description'] = FormChars($_POST['description']);
+        if ($prevPosition > $curPosition) $curPosition = $prevPosition;
+    }
+    $curPosition++;
 
-		$time = $_SERVER['REQUEST_TIME'];
+    mysqli_query($connect, "INSERT INTO `columns`  VALUES ('', '$post_name', '$post_bid', $curPosition)");
+}
 
-		mysqli_query($CONNECT, "INSERT INTO `boards`  VALUES ('', '$_POST[name]', '$_POST[description]', $time)");
+/**
+ * Добавление карточки
+ *
+ * @param $connect - соединение
+ * @param $post_name - название карточки
+ * @param $post_description - описание карточки
+ * @param $post_cid - идентификатор колонки
+ */
+function addCard($connect, $post_name, $post_description, $post_cid) {
+    $post_name = FormChars($post_name);
+    $post_description = FormChars($post_description);
+    $post_cid = FormChars($post_cid);
 
-		$row = mysqli_fetch_assoc(mysqli_query($CONNECT, "SELECT `id` FROM `boards` WHERE `date` = $time"));
-		mysqli_query($CONNECT, "INSERT INTO `in_board`  VALUES ('', '$_POST[id]', '$row[id]')");
-	}
+    $getPosition = mysqli_query($connect, "SELECT `position` FROM `cards` WHERE `column_id` = '$post_cid'");
 
-	else if ($Module == 'changeColumnSettings') {
-		$_POST['bid'] = FormChars($_POST['bid']);
-		$_POST['name'] = FormChars($_POST['name']);
-		$_POST['previous_name'] = FormChars($_POST['previous_name']);
-		$_POST['position'] = FormChars($_POST['position']);
+    $curPosition = 0;
+    while ($position = mysqli_fetch_assoc($getPosition)) {
+        $prevPosition = $position['position'];
+        if ($prevPosition > $curPosition) $curPosition = $prevPosition;
+    }
+    $curPosition++;
 
-		mysqli_query($CONNECT, "UPDATE `columns` SET `name` = '$_POST[name]' WHERE `board_id` = '$_POST[bid]' AND `position` = '$_POST[position]'");
-	}
+    mysqli_query($connect, "INSERT INTO `cards` VALUES ('', '$post_name', '$post_cid', '$post_description', $curPosition, '000000')");
+}
 
-	else if ($Module == 'changeCardColor') {
-		$_POST['card_id'] = FormChars($_POST['card_id']);
-		
-		mysqli_query($CONNECT, "UPDATE `cards` SET `color` = '$_POST[card_color]' WHERE `id` = '$_POST[card_id]'");
-	}
+/**
+ * Добавление доски
+ *
+ * @param $connect - соединение
+ * @param $post_id - идентификатор пользователя
+ * @param $post_name - название доски
+ * @param $post_description - описание доски
+ */
+function addBoard($connect, $post_id, $post_name, $post_description) {
+    $post_id = FormChars($post_id);
+    $post_name = FormChars($post_name);
+    $post_description = FormChars($post_description);
 
+    $time = $_SERVER['REQUEST_TIME'];
 
+    mysqli_query($connect, "INSERT INTO `boards`  VALUES ('', '$post_name', '$post_description', $time)");
 
+    $row = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `id` FROM `boards` WHERE `date` = $time"));
+    mysqli_query($connect, "INSERT INTO `in_board`  VALUES ('', '$post_id', '$row[id]')");
+}
 
+/**
+ * Изменение настроек колонки
+ *
+ * @param $connect - соединение
+ * @param $post_bid - идентификатор доски
+ * @param $post_name - название колонки
+ * @param $post_previous_name - предыдущее название колонки
+ * @param $post_position - позиция колонки в доске
+ */
+function changeColumnSettings($connect, $post_bid, $post_name, $post_previous_name, $post_position) {
+    $post_bid = FormChars($post_bid);
+    $post_name = FormChars($post_name);
+    $post_previous_name = FormChars($post_previous_name);
+    $post_position = FormChars($post_position);
 
+    mysqli_query($connect, "UPDATE `columns` SET `name` = '$post_name' WHERE `board_id` = '$post_bid' AND `position` = '$post_position'");
+}
 
+/**
+ * Изменение цвета карточки
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ * @param $post_card_color - новый цвет карточки
+ */
+function changeCardColor($connect, $post_card_id, $post_card_color) {
+    $post_card_id = FormChars($post_card_id);
+
+    mysqli_query($connect, "UPDATE `cards` SET `color` = '$post_card_color' WHERE `id` = '$post_card_id'");
+}
 
 
 
