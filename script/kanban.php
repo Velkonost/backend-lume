@@ -64,6 +64,18 @@ switch ($Module) {
     case 'changeCardColor':
         changeCardColor($CONNECT, $_POST['card_id'], $_POST['card_color']);
         break;
+    case 'setDate':
+        setDate($CONNECT, $_POST['card_id'], $_POST['date']);
+        break;
+    case 'addCheckbox':
+        addCheckbox($CONNECT, $_POST['card_id'], $_POST['title']);
+        break;
+    case 'setCheckboxDone':
+        setCheckboxDone($CONNECT, $_POST['id']);
+        break;
+    case 'setCheckboxUndone':
+        setCheckboxUndone($CONNECT, $_POST['id']);
+        break;
 
 }
 
@@ -220,6 +232,8 @@ function getColumnInfo($connect, $post_cid, $post_id) {
     $cardNames = array();
     $cardColors = array();
 
+
+
     $cards = mysqli_query($connect,
         "SELECT `id`, `name`, `description`, `position`, `color` FROM `cards` WHERE `column_id` = '$post_cid'");
 
@@ -301,7 +315,11 @@ function getCardInfo($connect, $post_card_id) {
     $users = array();
     $times = array();
 
-    $cardInfo = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `description`, `color` FROM `cards` WHERE `id` = '$post_card_id'"));
+    $cbIds = array();
+    $cbTitles = array();
+    $cbDones = array();
+
+    $cardInfo = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `description`, `color`, `date` FROM `cards` WHERE `id` = '$post_card_id'"));
     $cardParticipants = mysqli_query($connect, "SELECT `uid` FROM `in_card` WHERE `cid` = '$post_card_id'");
 
     while ($user = mysqli_fetch_assoc($cardParticipants)) {
@@ -321,6 +339,33 @@ function getCardInfo($connect, $post_card_id) {
 
         $response[$userId] = $participant;
 
+    }
+
+    $checkboxes = mysqli_query($connect,
+        "SELECT `id`, `title`, `done`, `position` FROM `checkboxes` WHERE `card_id` = '$post_card_id'");
+
+    while ($checkbox = mysqli_fetch_assoc($checkboxes)) {
+        $checkboxId = $checkbox['id'];
+        $checkboxTitle = $checkbox['title'];
+        $checkboxPosition = $checkbox['position'];
+        $checkboxDone = $checkbox['done'];
+
+        $cbIds[$checkboxPosition] = $checkboxId;
+        $cbNames[$checkboxId] = $checkboxTitle;
+        $cbDones[$checkboxId] = $checkboxDone;
+
+    }
+
+    ksort($cbIds);
+
+    $sortedCheckboxes = array_values(array_unique($cbIds));
+    foreach ($sortedCheckboxes as $key => $value) {
+
+        $checkbox = array();
+        $checkbox['title'] = $cbNames[$value];
+        $checkbox['done'] = $cbDones[$value];
+
+        $response[$value] = $checkbox;
     }
 
     $getComments = mysqli_query($connect,
@@ -357,10 +402,12 @@ function getCardInfo($connect, $post_card_id) {
         $response[$value . "comment"] = $comment;
     }
 
+    $response['cb_ids'] = array_values(array_unique($sortedCheckboxes));
     $response['comment_ids'] = array_values(array_unique($sortedComments));
 
     $response['card_description'] = $cardInfo['description'];
     $response['card_color'] = $cardInfo['color'];
+    $response['date'] = $cardInfo['date'];
 
     $response['uids'] = array_values(array_unique($ids));
     echo json_encode($response);
@@ -600,7 +647,6 @@ function getBoardColumns($connect, $post_bid) {
     $response['cids'] = array_values(array_unique($sortedColumns));
 
     echo json_encode($response);
-
 }
 
 /**
@@ -686,7 +732,7 @@ function addCard($connect, $post_name, $post_description, $post_cid) {
     }
     $curPosition++;
 
-    mysqli_query($connect, "INSERT INTO `cards` VALUES ('', '$post_name', '$post_cid', '$post_description', $curPosition, '000000')");
+    mysqli_query($connect, "INSERT INTO `cards` VALUES ('', '$post_name', '$post_cid', '$post_description', $curPosition, '000000', '')");
 }
 
 /**
@@ -741,6 +787,53 @@ function changeCardColor($connect, $post_card_id, $post_card_color) {
     mysqli_query($connect, "UPDATE `cards` SET `color` = '$post_card_color' WHERE `id` = '$post_card_id'");
 }
 
+/**
+ * Изменение срока выполнения каточки
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ * @param $post_date - дата
+ */
+function setDate($connect, $post_card_id, $post_date) {
+    $post_card_id = FormChars($post_card_id);
+
+    mysqli_query($connect, "UPDATE `cards` SET `date` = '$post_date' WHERE `id` = '$post_card_id'");
+}
+
+function addCheckbox($connect, $post_card_id, $post_title) {
+
+    $post_card_id = FormChars($post_card_id);
+    $post_title = FormChars($post_title);
+
+    $getPosition = mysqli_query($connect, "SELECT `position` FROM `checkboxes` WHERE `card_id` = '$post_card_id'");
+
+    $curPosition = 0;
+    while ($position = mysqli_fetch_assoc($getPosition)) {
+        $prevPosition = $position['position'];
+        if ($prevPosition > $curPosition) $curPosition = $prevPosition;
+    }
+    $curPosition++;
+
+    mysqli_query($connect, "INSERT INTO `checkboxes` VALUES ('', '$post_card_id', '$post_title', '0', $curPosition)");
+
+    $response = array();
+    $response['id'] = mysqli_fetch_assoc(mysqli_query($connect, "SELECT `id` FROM `checkboxes` WHERE `position` = '$curPosition' AND `title` = '$post_title' AND `card_id` = '$post_card_id'"))['id'];
+    $response['title'] = $post_title;
+
+    echo json_encode($response);
+}
+
+function setCheckboxDone($connect, $post_checkbox_id) {
+    $post_checkbox_id = FormChars($post_checkbox_id);
+
+    mysqli_query($connect, "UPDATE `checkboxes` SET `done` = 1 WHERE `id` = '$post_checkbox_id'");
+}
+
+function setCheckboxUndone($connect, $post_checkbox_id) {
+    $post_checkbox_id = FormChars($post_checkbox_id);
+
+    mysqli_query($connect, "UPDATE `checkboxes` SET `done` = 0 WHERE `id` = '$post_checkbox_id'");
+}
 
 
 ?>
