@@ -76,7 +76,80 @@ switch ($Module) {
     case 'setCheckboxUndone':
         setCheckboxUndone($CONNECT, $_POST['id']);
         break;
+    case 'addMapMarker':
+        addMapMarker($CONNECT, $_POST['card_id'], $_POST['latitude'], $_POST['longitude'], $_POST['title']);
+        break;
+    case 'getMapMarkers':
+        getMapMarkers($CONNECT, $_POST['card_id']);
+        break;
+    case 'removeMapMarker':
+        removeMapMarker($CONNECT, $_POST['card_id'], $_POST['latitude'], $_POST['longitude'], $_POST['title']);
+        break;
 
+}
+
+/**
+ * Удаление маркера с карты
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ * @param $post_latitude - широта метки
+ * @param $post_longitude - долгота метки
+ * @param $post_title - название метки
+ */
+function removeMapMarker($connect, $post_card_id, $post_latitude, $post_longitude, $post_title) {
+    $min_latitude = $post_latitude - 25.0;
+    $min_longitude = $post_longitude - 25.0;
+
+    $max_latitude = $post_latitude + 25.0;
+    $max_longitude = $post_longitude + 25.0;
+
+    mysqli_query($connect, "DELETE FROM `map_markers` WHERE `card_id` = '$post_card_id' AND `title` = '$post_title' AND `latitude` >= '$min_latitude' AND `latitude` <= '$max_latitude' AND `longitude` >= '$min_longitude' AND `longitude` <= '$max_longitude'");
+    echo $post_title;
+}
+
+/**
+ * Добавлеие маркера на карту
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ * @param $post_latitude - широта метки
+ * @param $post_longitude - долгота метки
+ * @param $post_title - название метки
+ */
+function addMapMarker($connect, $post_card_id, $post_latitude, $post_longitude, $post_title) {
+    mysqli_query($connect, "INSERT INTO `map_markers` VALUES ('', '$post_card_id', '$post_latitude', '$post_longitude', '$post_title' )");
+}
+
+/**
+ * Получение списка маркеров для карты конкретной карточки
+ *
+ * @param $connect - соединение
+ * @param $post_card_id - идентификатор карточки
+ */
+function getMapMarkers($connect, $post_card_id) {
+    $response = array();
+    $ids = array();
+
+    $markers = mysqli_query($connect, "SELECT * FROM `map_markers` WHERE `card_id` = '$post_card_id'");
+
+    while ($marker = mysqli_fetch_assoc($markers)) {
+
+        $mark = array();
+
+        $mark['id'] = $marker['id'];
+        $mark['latitude'] = $marker['latitude'];
+        $mark['longitude'] = $marker['longitude'];
+        $mark['title'] = $marker['title'];
+
+
+        array_push($ids, $mark['id']);
+        $response[$mark['id']] = $mark;
+    }
+
+    $response['ids'] = $ids;
+
+    echo json_encode($response);
 }
 
 /**
@@ -100,6 +173,7 @@ function showBoards($connect, $post_id) {
         array_push($bids, $bid);
         $response[$bid] = $getName['name'];
     }
+    
     $response['bids'] = $bids;
 
     echo json_encode($response);
